@@ -13,34 +13,48 @@ const Login = () => {
   const { push } = useRouter();
   const { data: session } = useSession();
   const [currentUser, setCurrentUser] = useState();
-  const [nfcEnabled, setNfcEnabled] = useState(false);
+  const [nfcSupported, setNfcSupported] = useState(false);
 
+  // Hàm xử lý khi người dùng nhấn nút đăng nhập
   const onSubmit = async (values, actions) => {
     const { fullName, tableName } = values;
     let options = { redirect: false, fullName, tableName };
     try {
       const res = await signIn("credentials", options);
+      console.log("Sign in response:", res); // Debug log
+
       if (res.error) {
         throw new Error(res.error);
       }
+
       actions.resetForm();
       toast.success("Login successful", {
         position: "bottom-left",
         theme: "colored",
       });
+
       if (res.ok) {
+        // Fetch user data after successful login
         const userResponse = await axios.get('/api/auth/session');
+        console.log("User session data:", userResponse.data); // Debug log
+
         if (userResponse.data.user && userResponse.data.user.id) {
           push("/profile/" + userResponse.data.user.id);
         } else {
+          console.error("User ID not available in session data");
           toast.error("Login successful, but user data is incomplete");
         }
+      } else {
+        console.error("Login response not OK");
+        toast.error("Login process completed, but encountered an issue");
       }
     } catch (err) {
+      console.error("Login error:", err); // Debug log
       toast.error(err.message || "An error occurred during login");
     }
   };
 
+  // Cấu hình formik cho form đăng nhập
   const formik = useFormik({
     initialValues: {
       fullName: "",
@@ -50,6 +64,7 @@ const Login = () => {
     validationSchema: loginSchema,
   });
 
+  // Hàm xử lý trạng thái người dùng và chuyển hướng nếu đã đăng nhập
   useEffect(() => {
     const getUser = async () => {
       try {
@@ -67,33 +82,48 @@ const Login = () => {
     getUser();
   }, [session, push, currentUser]);
 
-  const startNfcScan = async () => {
+  // Kiểm tra hỗ trợ NFC và cấu hình quét NFC
+  useEffect(() => {
     if ('NDEFReader' in window) {
+      setNfcSupported(true);
+    } else {
+      setNfcSupported(false);
+      toast.error("NFC is not supported on this device.");
+    }
+  }, []);
+
+  // Hàm bắt đầu quét NFC khi người dùng nhấn nút
+  const startNfcScan = async () => {
+    if (!nfcSupported) {
+      toast.error("NFC is not supported on this device.");
+      return;
+    }
+
+    try {
       const nfcReader = new window.NDEFReader();
-      try {
-        await nfcReader.scan();
-        nfcReader.onreading = (event) => {
-          for (const record of event.message.records) {
-            if (record.recordType === "text") {
-              const textDecoder = new TextDecoder(record.encoding);
-              const nfcData = textDecoder.decode(record.data);
-              const tableNameMatch = nfcData.match(/TableName=(\d+)/);
-              if (tableNameMatch) {
-                formik.setFieldValue('tableName', tableNameMatch[1]);
-              }
+      await nfcReader.scan();
+      toast.success("NFC scanning started. Please scan the NFC tag.");
+
+      nfcReader.onreading = (event) => {
+        for (const record of event.message.records) {
+          if (record.recordType === "text") {
+            const textDecoder = new TextDecoder(record.encoding);
+            const nfcData = textDecoder.decode(record.data);
+            const tableNameMatch = nfcData.match(/TableName=(\d+)/);
+
+            if (tableNameMatch) {
+              formik.setFieldValue('tableName', tableNameMatch[1]);
             }
           }
-        };
-        setNfcEnabled(true);
-        toast.success("NFC scanning started. Please scan the NFC tag again.");
-      } catch (error) {
-        toast.error("NFC scanning failed. Please try again.");
-      }
-    } else {
-      toast.error("NFC not supported on this device.");
+        }
+      };
+    } catch (error) {
+      console.log('NFC scanning failed: ', error);
+      toast.error("NFC scanning failed. Please try again.");
     }
   };
 
+  // Hàm xử lý đăng xuất người dùng
   const onLogout = async () => {
     try {
       await signOut({ redirect: false });
@@ -114,6 +144,7 @@ const Login = () => {
     }
   };
 
+  // Cấu hình các trường input cho form
   const inputs = [
     {
       id: 1,
@@ -132,7 +163,7 @@ const Login = () => {
       value: formik.values.tableName,
       errorMessage: formik.errors.tableName,
       touched: formik.touched.tableName,
-      disabled: false,
+      disabled: true, // Thêm thuộc tính disabled vào đây
     },
   ];
 
@@ -177,8 +208,10 @@ const Login = () => {
   );
 };
 
+// Hàm lấy dữ liệu của người dùng từ server và chuyển hướng nếu đã đăng nhập
 export async function getServerSideProps({ req }) {
   const session = await getSession({ req });
+
   if (session?.user?.id) {
     const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/users`);
     const user = res.data?.find((user) => user._id === session.user.id);
@@ -191,6 +224,7 @@ export async function getServerSideProps({ req }) {
       };
     }
   }
+
   return {
     props: {},
   };
