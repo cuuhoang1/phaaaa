@@ -13,41 +13,30 @@ const Login = () => {
   const { push } = useRouter();
   const { data: session } = useSession();
   const [currentUser, setCurrentUser] = useState();
+  const [nfcEnabled, setNfcEnabled] = useState(false);
 
   const onSubmit = async (values, actions) => {
     const { fullName, tableName } = values;
     let options = { redirect: false, fullName, tableName };
     try {
       const res = await signIn("credentials", options);
-      console.log("Sign in response:", res); // Debug log
-
       if (res.error) {
         throw new Error(res.error);
       }
-
       actions.resetForm();
       toast.success("Login successful", {
         position: "bottom-left",
         theme: "colored",
       });
-
       if (res.ok) {
-        // Fetch user data after successful login
         const userResponse = await axios.get('/api/auth/session');
-        console.log("User session data:", userResponse.data); // Debug log
-
         if (userResponse.data.user && userResponse.data.user.id) {
           push("/profile/" + userResponse.data.user.id);
         } else {
-          console.error("User ID not available in session data");
           toast.error("Login successful, but user data is incomplete");
         }
-      } else {
-        console.error("Login response not OK");
-        toast.error("Login process completed, but encountered an issue");
       }
     } catch (err) {
-      console.error("Login error:", err); // Debug log
       toast.error(err.message || "An error occurred during login");
     }
   };
@@ -78,44 +67,30 @@ const Login = () => {
     getUser();
   }, [session, push, currentUser]);
 
-  const startNfcScan = () => {
+  const startNfcScan = async () => {
     if ('NDEFReader' in window) {
       const nfcReader = new window.NDEFReader();
-
-      nfcReader.scan().then(() => {
-        toast.info("NFC scan started. Please scan your NFC tag.", {
-          position: "bottom-left",
-          theme: "colored",
-        });
+      try {
+        await nfcReader.scan();
         nfcReader.onreading = (event) => {
           for (const record of event.message.records) {
             if (record.recordType === "text") {
               const textDecoder = new TextDecoder(record.encoding);
               const nfcData = textDecoder.decode(record.data);
               const tableNameMatch = nfcData.match(/TableName=(\d+)/);
-
               if (tableNameMatch) {
                 formik.setFieldValue('tableName', tableNameMatch[1]);
-                toast.success("Table name set successfully!", {
-                  position: "bottom-left",
-                  theme: "colored",
-                });
               }
             }
           }
         };
-      }).catch(error => {
-        console.log('NFC scanning failed: ', error);
-        toast.error("NFC scanning failed. Please try again.", {
-          position: "bottom-left",
-          theme: "colored",
-        });
-      });
+        setNfcEnabled(true);
+        toast.success("NFC scanning started. Please scan the NFC tag again.");
+      } catch (error) {
+        toast.error("NFC scanning failed. Please try again.");
+      }
     } else {
-      toast.error("NFC is not supported in your browser.", {
-        position: "bottom-left",
-        theme: "colored",
-      });
+      toast.error("NFC not supported on this device.");
     }
   };
 
@@ -157,9 +132,8 @@ const Login = () => {
       value: formik.values.tableName,
       errorMessage: formik.errors.tableName,
       touched: formik.touched.tableName,
-      disabled: flase, // Thêm thuộc tính disabled vào đây
+      disabled: false,
     },
-    
   ];
 
   return (
@@ -205,7 +179,6 @@ const Login = () => {
 
 export async function getServerSideProps({ req }) {
   const session = await getSession({ req });
-
   if (session?.user?.id) {
     const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/users`);
     const user = res.data?.find((user) => user._id === session.user.id);
@@ -218,7 +191,6 @@ export async function getServerSideProps({ req }) {
       };
     }
   }
-
   return {
     props: {},
   };
