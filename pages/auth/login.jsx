@@ -13,6 +13,7 @@ const Login = () => {
   const { push } = useRouter();
   const { data: session } = useSession();
   const [currentUser, setCurrentUser] = useState();
+  const [nfcEnabled, setNfcEnabled] = useState(false); // State to handle NFC enable status
 
   const onSubmit = async (values, actions) => {
     const { fullName, tableName } = values;
@@ -78,25 +79,33 @@ const Login = () => {
     getUser();
   }, [session, push, currentUser]);
 
-  const startNfcScan = () => {
+  const startNfcScan = async () => {
     if ('NDEFReader' in window) {
       const nfcReader = new window.NDEFReader();
-      nfcReader.scan().then(() => {
+
+      try {
+        await nfcReader.scan();
         nfcReader.onreading = (event) => {
           for (const record of event.message.records) {
             if (record.recordType === "text") {
               const textDecoder = new TextDecoder(record.encoding);
               const nfcData = textDecoder.decode(record.data);
               const tableNameMatch = nfcData.match(/TableName=(\d+)/);
+
               if (tableNameMatch) {
                 formik.setFieldValue('tableName', tableNameMatch[1]);
               }
             }
           }
         };
-      }).catch(error => {
+        setNfcEnabled(true); // Set NFC enabled status to true
+        toast.success("NFC scanning started. Please scan the NFC tag again.");
+      } catch (error) {
         console.log('NFC scanning failed: ', error);
-      });
+        toast.error("NFC scanning failed. Please try again.");
+      }
+    } else {
+      toast.error("NFC not supported on this device.");
     }
   };
 
@@ -138,7 +147,7 @@ const Login = () => {
       value: formik.values.tableName,
       errorMessage: formik.errors.tableName,
       touched: formik.touched.tableName,
-      disabled: true,
+      disabled: false,
     },
   ];
 
@@ -173,7 +182,7 @@ const Login = () => {
           <button
             className="btn-primary !bg-secondary"
             type="button"
-            onClick={startNfcScan}
+            onClick={startNfcScan} // Attach NFC scan event to this button
           >
             Bật NFC Để Quét
           </button>
