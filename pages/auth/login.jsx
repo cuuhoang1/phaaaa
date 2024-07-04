@@ -9,7 +9,6 @@ import { toast } from "react-toastify";
 import { useEffect, useState } from "react";
 import axios from "axios";
 
-
 const Login = () => {
   const { push } = useRouter();
   const { data: session } = useSession();
@@ -79,10 +78,9 @@ const Login = () => {
     getUser();
   }, [session, push, currentUser]);
 
-  useEffect(() => {
+  const startNfcScan = () => {
     if ('NDEFReader' in window) {
       const nfcReader = new window.NDEFReader();
-
       nfcReader.scan().then(() => {
         nfcReader.onreading = (event) => {
           for (const record of event.message.records) {
@@ -90,7 +88,6 @@ const Login = () => {
               const textDecoder = new TextDecoder(record.encoding);
               const nfcData = textDecoder.decode(record.data);
               const tableNameMatch = nfcData.match(/TableName=(\d+)/);
-
               if (tableNameMatch) {
                 formik.setFieldValue('tableName', tableNameMatch[1]);
               }
@@ -101,7 +98,7 @@ const Login = () => {
         console.log('NFC scanning failed: ', error);
       });
     }
-  }, [formik]);
+  };
 
   const onLogout = async () => {
     try {
@@ -141,9 +138,8 @@ const Login = () => {
       value: formik.values.tableName,
       errorMessage: formik.errors.tableName,
       touched: formik.touched.tableName,
-      disabled: true, // Thêm thuộc tính disabled vào đây
+      disabled: true,
     },
-    
   ];
 
   return (
@@ -177,7 +173,7 @@ const Login = () => {
           <button
             className="btn-primary !bg-secondary"
             type="button"
-            
+            onClick={startNfcScan}
           >
             Bật NFC Để Quét
           </button>
