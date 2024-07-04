@@ -13,7 +13,6 @@ const Login = () => {
   const { push } = useRouter();
   const { data: session } = useSession();
   const [currentUser, setCurrentUser] = useState();
-  const [nfcEnabled, setNfcEnabled] = useState(false); // State to handle NFC enable status
 
   const onSubmit = async (values, actions) => {
     const { fullName, tableName } = values;
@@ -21,22 +20,22 @@ const Login = () => {
     try {
       const res = await signIn("credentials", options);
       console.log("Sign in response:", res); // Debug log
-  
+
       if (res.error) {
         throw new Error(res.error);
       }
-  
+
       actions.resetForm();
       toast.success("Login successful", {
         position: "bottom-left",
         theme: "colored",
       });
-  
+
       if (res.ok) {
         // Fetch user data after successful login
         const userResponse = await axios.get('/api/auth/session');
         console.log("User session data:", userResponse.data); // Debug log
-  
+
         if (userResponse.data.user && userResponse.data.user.id) {
           push("/profile/" + userResponse.data.user.id);
         } else {
@@ -79,12 +78,15 @@ const Login = () => {
     getUser();
   }, [session, push, currentUser]);
 
-  const startNfcScan = async () => {
+  const startNfcScan = () => {
     if ('NDEFReader' in window) {
       const nfcReader = new window.NDEFReader();
 
-      try {
-        await nfcReader.scan();
+      nfcReader.scan().then(() => {
+        toast.info("NFC scan started. Please scan your NFC tag.", {
+          position: "bottom-left",
+          theme: "colored",
+        });
         nfcReader.onreading = (event) => {
           for (const record of event.message.records) {
             if (record.recordType === "text") {
@@ -94,18 +96,26 @@ const Login = () => {
 
               if (tableNameMatch) {
                 formik.setFieldValue('tableName', tableNameMatch[1]);
+                toast.success("Table name set successfully!", {
+                  position: "bottom-left",
+                  theme: "colored",
+                });
               }
             }
           }
         };
-        setNfcEnabled(true); // Set NFC enabled status to true
-        toast.success("NFC scanning started. Please scan the NFC tag again.");
-      } catch (error) {
+      }).catch(error => {
         console.log('NFC scanning failed: ', error);
-        toast.error("NFC scanning failed. Please try again.");
-      }
+        toast.error("NFC scanning failed. Please try again.", {
+          position: "bottom-left",
+          theme: "colored",
+        });
+      });
     } else {
-      toast.error("NFC not supported on this device.");
+      toast.error("NFC is not supported in your browser.", {
+        position: "bottom-left",
+        theme: "colored",
+      });
     }
   };
 
@@ -147,8 +157,9 @@ const Login = () => {
       value: formik.values.tableName,
       errorMessage: formik.errors.tableName,
       touched: formik.touched.tableName,
-      disabled: false,
+      disabled: true, // Thêm thuộc tính disabled vào đây
     },
+    
   ];
 
   return (
@@ -182,7 +193,7 @@ const Login = () => {
           <button
             className="btn-primary !bg-secondary"
             type="button"
-            onClick={startNfcScan} // Attach NFC scan event to this button
+            onClick={startNfcScan}
           >
             Bật NFC Để Quét
           </button>
